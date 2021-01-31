@@ -5,6 +5,31 @@ Versions marked as 'unofficial' are labelled only for the needs of this changelo
 Change History
 --------------
 
+Version: 1.21 (2020/07-09)
+Improving stability
+- Fixed a crash in the input handler caused by invalidated by hot-reload instance trying to unregister a delegate.
+- Improved hot-reload stability and support for reloading after recompiling outside of the editor. Both methods should be equally supported and work together.
+- Improved behaviour of delegates when hot-reloading.
+- Changed context index mapping to fix issues with multi-PIE debugging in 4.25.
+- Fixed Linux crash caused by wrong mapping of key codes.
+
+Version: 1.20 (2020/06)
+Transition to IWYU and maintenance:
+- Replaced includes of monolithic headers.
+- Removed explicit PCH and switched to IWYU-style PCH model.
+- Fixed includes to compile without explicit PCH in non-unity mode.
+- Fixed a few issues causing compilation errors in older engine versions.
+- Fixed debug code to compile on platforms using other than char or wchar_t characters.
+- Fixed issues in recently added DPI scaling.
+- Cleaned obsolete and unused code.
+- Replaced custom scope guards with the template provided by the engine.
+
+Version: 1.19 (2020/03-06)
+- Integrated fix for issue with ImGui popup/modal windows not being able to be closed in transparent mouse input mode. 
+- Integrated first version of Adaptive Canvas Size.
+- Added different options to define canvas size, with Adaptive Canvas Size being one of the options (viewport).
+- Added option for DPI scaling.
+
 Version: 1.18 (2020/01)
 - Updated to engine version 4.24.
 - Updated to ImGui version 1.74.

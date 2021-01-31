@@ -164,11 +164,13 @@ public:
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
 
-	private:
+private:
 
 #if WITH_EDITOR
 	virtual void SetProperties(const FImGuiModuleProperties& Properties);
-	virtual struct ImGuiContext** GetImGuiContextHandle();
-	virtual struct FImGuiDelegatesContainer& GetDelegatesContainer();
+	virtual struct FImGuiContextHandle& GetImGuiContextHandle();
+	virtual struct FImGuiDelegatesContainerHandle& GetDelegatesContainerHandle();
+	friend struct FImGuiContextHandle;
+	friend struct FImGuiDelegatesContainerHandle;
 #endif
 };

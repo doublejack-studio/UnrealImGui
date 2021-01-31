@@ -1,12 +1,10 @@
 // Distributed under the MIT License (MIT) (see accompanying LICENSE file)
 
-#include "ImGuiPrivatePCH.h"
+#include "ImGuiImplementation.h"
 
-// We build ImGui source code as part of this module. This is for convenience (no need to manually build libraries for
-// different target platforms) but it also exposes the whole ImGui source for inspection, which can be pretty handy.
-// Source files are included from Third Party directory, so we can wrap them in required by Unreal Build System headers
-// without modifications in ImGui source code.
-//
+#include <CoreMinimal.h>
+
+// For convenience and easy access to the ImGui source code, we build it as part of this module.
 // We don't need to define IMGUI_API manually because it is already done for this module.
 
 #if PLATFORM_XBOXONE
@@ -15,18 +13,34 @@
 #define IMGUI_DISABLE_WIN32_DEFAULT_IME_FUNCTIONS
 #endif // PLATFORM_XBOXONE
 
-#if WITH_EDITOR
-// Global ImGui context pointer.
-ImGuiContext* GImGuiContextPtr = nullptr;
-// Handle to the global ImGui context pointer.
-ImGuiContext** GImGuiContextPtrHandle = &GImGuiContextPtr;
-// Get the global ImGui context pointer (GImGui) indirectly to allow redirections in obsolete modules.
-#define GImGui (*GImGuiContextPtrHandle)
-#endif // WITH_EDITOR
-
 #if PLATFORM_WINDOWS
 #include <Windows/AllowWindowsPlatformTypes.h>
 #endif // PLATFORM_WINDOWS
+
+#if WITH_EDITOR
+
+#include "ImGuiModule.h"
+#include "Utilities/RedirectingHandle.h"
+
+// Redirecting handle which will automatically bind to another one, if a different instance of the module is loaded.
+struct FImGuiContextHandle : public Utilities::TRedirectingHandle<ImGuiContext*>
+{
+	FImGuiContextHandle(ImGuiContext*& InDefaultContext)
+		: Utilities::TRedirectingHandle<ImGuiContext*>(InDefaultContext)
+	{
+		if (FImGuiModule* Module = FModuleManager::GetModulePtr<FImGuiModule>("ImGui"))
+		{
+			SetParent(&Module->GetImGuiContextHandle());
+		}
+	}
+};
+
+static ImGuiContext* ImGuiContextPtr = nullptr;
+static FImGuiContextHandle ImGuiContextPtrHandle(ImGuiContextPtr);
+
+// Get the global ImGui context pointer (GImGui) indirectly to allow redirections in obsolete modules.
+#define GImGui (ImGuiContextPtrHandle.Get())
+#endif // WITH_EDITOR
 
 #include "imgui.cpp"
 #include "imgui_demo.cpp"
@@ -43,14 +57,14 @@ ImGuiContext** GImGuiContextPtrHandle = &GImGuiContextPtr;
 namespace ImGuiImplementation
 {
 #if WITH_EDITOR
-	ImGuiContext** GetImGuiContextHandle()
+	FImGuiContextHandle& GetContextHandle()
 	{
-		return GImGuiContextPtrHandle;
+		return ImGuiContextPtrHandle;
 	}
 
-	void SetImGuiContextHandle(ImGuiContext** Handle)
+	void SetParentContextHandle(FImGuiContextHandle& Parent)
 	{
-		GImGuiContextPtrHandle = Handle;
+		ImGuiContextPtrHandle.SetParent(&Parent);
 	}
 #endif // WITH_EDITOR
 }

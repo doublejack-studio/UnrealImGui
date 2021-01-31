@@ -1,15 +1,15 @@
 // Distributed under the MIT License (MIT) (see accompanying LICENSE file)
 
-#include "ImGuiPrivatePCH.h"
-
 #include "ImGuiContextProxy.h"
 
 #include "ImGuiDelegatesContainer.h"
 #include "ImGuiImplementation.h"
 #include "ImGuiInteroperability.h"
 #include "Utilities/Arrays.h"
+#include "VersionCompatibility.h"
 
-#include <Runtime/Launch/Resources/Version.h>
+#include <GenericPlatform/GenericPlatformFile.h>
+#include <Misc/Paths.h>
 
 
 static constexpr float DEFAULT_CANVAS_WIDTH = 3840.f;
@@ -39,12 +39,43 @@ namespace
 		static FString SaveDirectory = GetSaveDirectory();
 		return FPaths::Combine(SaveDirectory, Name + TEXT(".ini"));
 	}
+
+	struct FGuardCurrentContext
+	{
+		FGuardCurrentContext()
+			: OldContext(ImGui::GetCurrentContext())
+		{
+		}
+
+		~FGuardCurrentContext()
+		{
+			if (bRestore)
+			{
+				ImGui::SetCurrentContext(OldContext);
+			}
+		}
+
+		FGuardCurrentContext(FGuardCurrentContext&& Other)
+			: OldContext(MoveTemp(Other.OldContext))
+		{
+			Other.bRestore = false;
+		}
+
+		FGuardCurrentContext& operator=(FGuardCurrentContext&&) = delete;
+
+		FGuardCurrentContext(const FGuardCurrentContext&) = delete;
+		FGuardCurrentContext& operator=(const FGuardCurrentContext&) = delete;
+
+	private:
+
+		ImGuiContext* OldContext = nullptr;
+		bool bRestore = true;
+	};
 }
 
-FImGuiContextProxy::FImGuiContextProxy(const FString& InName, int32 InContextIndex, FSimpleMulticastDelegate* InSharedDrawEvent, ImFontAtlas* InFontAtlas)
+FImGuiContextProxy::FImGuiContextProxy(const FString& InName, int32 InContextIndex, ImFontAtlas* InFontAtlas, float InDPIScale)
 	: Name(InName)
 	, ContextIndex(InContextIndex)
-	, SharedDrawEvent(InSharedDrawEvent)
 	, IniFilename(TCHAR_TO_ANSI(*GetIniFile(InName)))
 {
 	// Create context.
@@ -59,9 +90,12 @@ FImGuiContextProxy::FImGuiContextProxy(const FString& InName, int32 InContextInd
 	// Set session data storage.
 	IO.IniFilename = IniFilename.c_str();
 
-	// Use pre-defined canvas size.
-	IO.DisplaySize = { DEFAULT_CANVAS_WIDTH, DEFAULT_CANVAS_HEIGHT };
-	DisplaySize = ImGuiInterops::ToVector2D(IO.DisplaySize);
+	// Start with the default canvas size.
+	ResetDisplaySize();
+	IO.DisplaySize = { DisplaySize.X, DisplaySize.Y };
+
+	// Set the initial DPI scale.
+	SetDPIScale(InDPIScale);
 
 	// Initialize key mapping, so context can correctly interpret input state.
 	ImGuiInterops::SetUnrealKeyMap(IO);
@@ -81,6 +115,26 @@ FImGuiContextProxy::~FImGuiContextProxy()
 
 		// Save context data and destroy.
 		ImGui::DestroyContext(Context);
+	}
+}
+
+void FImGuiContextProxy::ResetDisplaySize()
+{
+	DisplaySize = { DEFAULT_CANVAS_WIDTH, DEFAULT_CANVAS_HEIGHT };
+}
+
+void FImGuiContextProxy::SetDPIScale(float Scale)
+{
+	if (DPIScale != Scale)
+	{
+		DPIScale = Scale;
+
+		ImGuiStyle NewStyle = ImGuiStyle();
+		NewStyle.ScaleAllSizes(Scale);
+
+		FGuardCurrentContext GuardContext;
+		SetAsCurrent();
+		ImGui::GetStyle() = MoveTemp(NewStyle);
 	}
 }
 
@@ -134,15 +188,16 @@ void FImGuiContextProxy::Tick(float DeltaSeconds)
 			EndFrame();
 		}
 
-		// Update context information (some data, like mouse cursor, may be cleaned in new frame, so we should collect it
-		// beforehand).
+		// Update context information (some data need to be collected before starting a new frame while some other data
+		// may need to be collected after).
 		bHasActiveItem = ImGui::IsAnyItemActive();
-		bIsMouseHoveringAnyWindow = ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow);
 		MouseCursor = ImGuiInterops::ToSlateMouseCursor(ImGui::GetMouseCursor());
-		DisplaySize = ImGuiInterops::ToVector2D(ImGui::GetIO().DisplaySize);
 
 		// Begin a new frame and set the context back to a state in which it allows to draw controls.
 		BeginFrame(DeltaSeconds);
+
+		// Update remaining context information.
+		bWantsMouseCapture = ImGui::GetIO().WantCaptureMouse;
 	}
 }
 
@@ -155,6 +210,8 @@ void FImGuiContextProxy::BeginFrame(float DeltaTime)
 
 		ImGuiInterops::CopyInput(IO, InputState);
 		InputState.ClearUpdateState();
+
+		IO.DisplaySize = { DisplaySize.X, DisplaySize.Y };
 
 		ImGui::NewFrame();
 
@@ -237,11 +294,6 @@ void FImGuiContextProxy::BroadcastWorldDebug()
 
 void FImGuiContextProxy::BroadcastMultiContextDebug()
 {
-	if (SharedDrawEvent && SharedDrawEvent->IsBound())
-	{
-		SharedDrawEvent->Broadcast();
-	}
-
 	FSimpleMulticastDelegate& MultiContextDebugEvent = FImGuiDelegatesContainer::Get().OnMultiContextDebug();
 	if (MultiContextDebugEvent.IsBound())
 	{

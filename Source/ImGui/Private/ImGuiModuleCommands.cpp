@@ -1,9 +1,8 @@
 // Distributed under the MIT License (MIT) (see accompanying LICENSE file)
 
-#include "ImGuiPrivatePCH.h"
-
 #include "ImGuiModuleCommands.h"
 
+#include "ImGuiModuleProperties.h"
 #include "Utilities/DebugExecBindings.h"
 
 

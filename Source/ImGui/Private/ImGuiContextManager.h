@@ -3,7 +3,11 @@
 #pragma once
 
 #include "ImGuiContextProxy.h"
+#include "VersionCompatibility.h"
 
+
+class FImGuiModuleSettings;
+struct FImGuiDPIScaleInfo;
 
 // TODO: It might be useful to broadcast FContextProxyCreatedDelegate to users, to support similar cases to our ImGui
 // demo, but we would need to remove from that interface internal classes.
@@ -18,7 +22,7 @@ class FImGuiContextManager
 {
 public:
 
-	FImGuiContextManager();
+	FImGuiContextManager(FImGuiModuleSettings& InSettings);
 
 	FImGuiContextManager(const FImGuiContextManager&) = delete;
 	FImGuiContextManager& operator=(const FImGuiContextManager&) = delete;
@@ -30,7 +34,6 @@ public:
 
 	ImFontAtlas& GetFontAtlas() { return FontAtlas; }
 	const ImFontAtlas& GetFontAtlas() const { return FontAtlas; }
-
 
 #if WITH_EDITOR
 	// Get or create editor ImGui context proxy.
@@ -55,12 +58,11 @@ public:
 		return Data ? Data->ContextProxy.Get() : nullptr;
 	}
 
-	// Delegate called for all contexts in manager, right after calling context specific draw event. Allows listeners
-	// draw the same content to multiple contexts.
-	FSimpleMulticastDelegate& OnDrawMultiContext() { return DrawMultiContextEvent; }
+	// Delegate called when a new context proxy is created.
+	FContextProxyCreatedDelegate OnContextProxyCreated;
 
-	// Delegate called when new context proxy is created.
-	FContextProxyCreatedDelegate& OnContextProxyCreated() { return ContextProxyCreatedEvent; }
+	// Delegate called after font atlas is built.
+	FSimpleMulticastDelegate OnFontAtlasBuilt;
 
 	void Tick(float DeltaSeconds);
 
@@ -68,9 +70,9 @@ private:
 
 	struct FContextData
 	{
-		FContextData(const FString& ContextName, int32 ContextIndex, FSimpleMulticastDelegate& SharedDrawEvent, ImFontAtlas& FontAtlas, int32 InPIEInstance = -1)
+		FContextData(const FString& ContextName, int32 ContextIndex, ImFontAtlas& FontAtlas, float DPIScale, int32 InPIEInstance = -1)
 			: PIEInstance(InPIEInstance)
-			, ContextProxy(new FImGuiContextProxy(ContextName, ContextIndex, &SharedDrawEvent, &FontAtlas))
+			, ContextProxy(new FImGuiContextProxy(ContextName, ContextIndex, &FontAtlas, DPIScale))
 		{
 		}
 
@@ -99,11 +101,17 @@ private:
 
 	FContextData& GetWorldContextData(const UWorld& World, int32* OutContextIndex = nullptr);
 
+	void SetDPIScale(const FImGuiDPIScaleInfo& ScaleInfo);
+	void BuildFontAtlas();
+	void RebuildFontAtlas();
+
 	TMap<int32, FContextData> Contexts;
 
-	FSimpleMulticastDelegate DrawMultiContextEvent;
-
-	FContextProxyCreatedDelegate ContextProxyCreatedEvent;
-
 	ImFontAtlas FontAtlas;
+	TArray<TUniquePtr<ImFontAtlas>> FontResourcesToRelease;
+
+	FImGuiModuleSettings& Settings;
+
+	float DPIScale = -1.f;
+	int32 FontResourcesReleaseCountdown = 0;
 };

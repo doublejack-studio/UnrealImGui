@@ -2,8 +2,21 @@
 
 #pragma once
 
+#include "VersionCompatibility.h"
+
+#include <Curves/CurveFloat.h>
 #include <Delegates/Delegate.h>
+#include <InputCoreTypes.h>
+#include <Styling/SlateTypes.h>
 #include <UObject/Object.h>
+
+// We use FStringClassReference, which is supported by older and newer engine versions. Starting from 4.18, it is
+// a typedef of FSoftClassPath, which is also recognized by UHT.
+#if ENGINE_COMPATIBILITY_LEGACY_STRING_CLASS_REF
+#include <StringClassReference.h>
+#else
+#include <UObject/SoftObjectPath.h>
+#endif
 
 #include "ImGuiModuleSettings.generated.h"
 
@@ -45,6 +58,100 @@ struct FImGuiKeyInfo
 	{
 		return !(Lhs == Rhs);
 	}
+};
+
+UENUM(BlueprintType)
+enum class EImGuiCanvasSizeType : uint8
+{
+	Custom UMETA(ToolTip = "Canvas will have a custom width and height."),
+	Desktop UMETA(ToolTip = "Canvas will have the same width and height as the desktop."),
+	Viewport UMETA(ToolTip = "Canvas will always have the same width and height as the viewport."),
+};
+
+/**
+ * Struct with information how to calculate canvas size. 
+ */
+USTRUCT()
+struct FImGuiCanvasSizeInfo
+{
+	GENERATED_BODY()
+
+	// Select how to specify canvas size.
+	UPROPERTY(EditAnywhere, Category = "Canvas Size")
+	EImGuiCanvasSizeType SizeType = EImGuiCanvasSizeType::Desktop;
+
+	// Custom canvas width.
+	UPROPERTY(EditAnywhere, Category = "Canvas Size", meta = (ClampMin = 0, UIMin = 0))
+	int32 Width = 3840;
+
+	// Custom canvas height.
+	UPROPERTY(EditAnywhere, Category = "Canvas Size", meta = (ClampMin = 0, UIMin = 0))
+	int32 Height = 2160;
+
+	// If this is true, canvas width or height may be extended, if the viewport size is larger.
+	UPROPERTY(EditAnywhere, Category = "Canvas Size", meta = (ClampMin = 0, UIMin = 0))
+	bool bExtendToViewport = true;
+
+	bool operator==(const FImGuiCanvasSizeInfo& Other) const
+	{
+		return (SizeType == Other.SizeType) && (Width == Other.Width)
+			&& (Height == Other.Height) && (bExtendToViewport == Other.bExtendToViewport);
+	}
+
+	bool operator!=(const FImGuiCanvasSizeInfo& Other) const { return !(*this == Other); }
+};
+
+UENUM(BlueprintType)
+enum class EImGuiDPIScaleMethod : uint8
+{
+	ImGui UMETA(DisplayName = "ImGui", ToolTip = "Scale ImGui fonts and styles."),
+	Slate UMETA(ToolTip = "Scale in Slate. ImGui canvas size will be adjusted to get the screen size that is the same as defined in the Canvas Size property.")
+};
+
+/**
+ * Struct with DPI scale data.
+ */
+USTRUCT()
+struct FImGuiDPIScaleInfo
+{
+	GENERATED_BODY()
+
+protected:
+
+	// Whether to scale in ImGui or in Slate. Scaling in ImGui gives better looking results but Slate might be a better
+	// option when layouts do not account for different fonts and styles. When scaling in Slate, ImGui canvas size will
+	// be adjusted to get the screen size that is the same as defined in the Canvas Size property.
+	UPROPERTY(EditAnywhere, Category = "DPI Scale")
+	EImGuiDPIScaleMethod ScalingMethod = EImGuiDPIScaleMethod::ImGui;
+
+	// An optional scale to apply on top or instead of the curve-based scale.
+	UPROPERTY(EditAnywhere, Category = "DPI Scale", meta = (ClampMin = 0, UIMin = 0))
+	float Scale = 1.f;
+
+	// Curve mapping resolution height to scale.
+	UPROPERTY(config, EditAnywhere, Category = "DPI Scale", meta = (XAxisName = "Resolution Height", YAxisName = "Scale", EditCondition = "bScaleWithCurve"))
+	FRuntimeFloatCurve DPICurve;
+
+	// Whether to use curve-based scaling. If enabled, Scale will be multiplied by a value read from the DPICurve.
+	// If disabled, only the Scale property will be used.
+	UPROPERTY(config, EditAnywhere, Category = "DPI Scale")
+	bool bScaleWithCurve = true;
+
+public:
+
+	FImGuiDPIScaleInfo();
+
+	float GetImGuiScale() const { return ShouldScaleInSlate() ? 1.f : CalculateScale(); }
+
+	float GetSlateScale() const { return ShouldScaleInSlate() ? CalculateScale() : 1.f; }
+
+	bool ShouldScaleInSlate() const { return ScalingMethod == EImGuiDPIScaleMethod::Slate; }
+
+private:
+
+	float CalculateScale() const { return Scale * CalculateResolutionBasedScale(); }
+
+	float CalculateResolutionBasedScale() const;
 };
 
 // UObject used for loading and saving ImGui settings. To access actual settings use FImGuiModuleSettings interface.
@@ -103,9 +210,13 @@ protected:
 	UPROPERTY(EditAnywhere, config, Category = "Keyboard Shortcuts")
 	FImGuiKeyInfo ToggleInput;
 
-	// Deprecated name for ToggleInput. Kept temporarily to automatically move old configuration.
-	UPROPERTY(config)
-	FImGuiKeyInfo SwitchInputModeKey_DEPRECATED;
+	// Chose how to define the ImGui canvas size. Select between custom, desktop and viewport.
+	UPROPERTY(EditAnywhere, config, Category = "Canvas Size")
+	FImGuiCanvasSizeInfo CanvasSize;
+
+	// Setup DPI Scale.
+	UPROPERTY(EditAnywhere, config, Category = "DPI Scale", Meta = (ShowOnlyInnerProperties))
+	FImGuiDPIScaleInfo DPIScale;
 
 	static UImGuiSettings* DefaultInstance;
 
@@ -126,6 +237,8 @@ public:
 	// Generic delegate used to notify changes of boolean properties.
 	DECLARE_MULTICAST_DELEGATE_OneParam(FBoolChangeDelegate, bool);
 	DECLARE_MULTICAST_DELEGATE_OneParam(FStringClassReferenceChangeDelegate, const FStringClassReference&);
+	DECLARE_MULTICAST_DELEGATE_OneParam(FImGuiCanvasSizeInfoChangeDelegate, const FImGuiCanvasSizeInfo&);
+	DECLARE_MULTICAST_DELEGATE_OneParam(FImGuiDPIScaleInfoChangeDelegate, const FImGuiDPIScaleInfo&);
 
 	// Constructor for ImGui module settings. It will bind to instances of module properties and commands and will
 	// update them every time when settings are changed.
@@ -148,15 +261,29 @@ public:
 	// Get the shortcut configuration for 'ImGui.ToggleInput' command.
 	const FImGuiKeyInfo& GetToggleInputKey() const { return ToggleInputKey; }
 
+	// Get the information how to calculate the canvas size.
+	const FImGuiCanvasSizeInfo& GetCanvasSizeInfo() const { return CanvasSize; }
+
+	// Get the DPI Scale information.
+	const FImGuiDPIScaleInfo& GetDPIScaleInfo() const { return DPIScale; }
+
 	// Delegate raised when ImGui Input Handle is changed.
 	FStringClassReferenceChangeDelegate OnImGuiInputHandlerClassChanged;
 
 	// Delegate raised when software cursor configuration is changed.
 	FBoolChangeDelegate OnUseSoftwareCursorChanged;
 
+	// Delegate raised when information how to calculate the canvas size is changed.
+	FImGuiCanvasSizeInfoChangeDelegate OnCanvasSizeChangedDelegate;
+
+	// Delegate raised when the DPI scale is changed.
+	FImGuiDPIScaleInfoChangeDelegate OnDPIScaleChangedDelegate;
+
 private:
 
+	void InitializeAllSettings();
 	void UpdateSettings();
+	void UpdateDPIScaleInfo();
 
 	void SetImGuiInputHandlerClass(const FStringClassReference& ClassReference);
 	void SetShareKeyboardInput(bool bShare);
@@ -164,6 +291,8 @@ private:
 	void SetShareMouseInput(bool bShare);
 	void SetUseSoftwareCursor(bool bUse);
 	void SetToggleInputKey(const FImGuiKeyInfo& KeyInfo);
+	void SetCanvasSizeInfo(const FImGuiCanvasSizeInfo& CanvasSizeInfo);
+	void SetDPIScaleInfo(const FImGuiDPIScaleInfo& ScaleInfo);
 
 #if WITH_EDITOR
 	void OnPropertyChanged(class UObject* ObjectBeingModified, struct FPropertyChangedEvent& PropertyChangedEvent);
@@ -174,6 +303,8 @@ private:
 
 	FStringClassReference ImGuiInputHandlerClass;
 	FImGuiKeyInfo ToggleInputKey;
+	FImGuiCanvasSizeInfo CanvasSize;
+	FImGuiDPIScaleInfo DPIScale;
 	bool bShareKeyboardInput = false;
 	bool bShareGamepadInput = false;
 	bool bShareMouseInput = false;

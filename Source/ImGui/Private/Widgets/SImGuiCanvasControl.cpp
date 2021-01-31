@@ -1,8 +1,11 @@
 // Distributed under the MIT License (MIT) (see accompanying LICENSE file)
 
-#include "ImGuiPrivatePCH.h"
-
 #include "SImGuiCanvasControl.h"
+
+#include "VersionCompatibility.h"
+
+#include <Rendering/DrawElements.h>
+#include <SlateOptMacros.h>
 
 
 namespace

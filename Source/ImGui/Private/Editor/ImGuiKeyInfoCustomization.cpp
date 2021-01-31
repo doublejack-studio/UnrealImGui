@@ -1,10 +1,8 @@
 // Distributed under the MIT License (MIT) (see accompanying LICENSE file)
 
-#include "ImGuiPrivatePCH.h"
+#include "ImGuiKeyInfoCustomization.h"
 
 #if WITH_EDITOR
-
-#include "ImGuiKeyInfoCustomization.h"
 
 #include "ImGuiModuleSettings.h"
 
@@ -137,7 +135,7 @@ namespace
 
 namespace InputConstants
 {
-	static const FMargin PropertyPadding(2.0f, 0.0f, 2.0f, 0.0f);
+	static const FMargin PropertyPadding(0.0f, 0.0f, 4.0f, 0.0f);
 }
 
 TSharedRef<IPropertyTypeCustomization> FImGuiKeyInfoCustomization::MakeInstance()

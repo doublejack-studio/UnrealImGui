@@ -2,8 +2,10 @@
 
 #pragma once
 
-#include <Core.h>
-#include <Engine.h>
+#include <Engine/Engine.h>
+#include <Engine/GameInstance.h>
+#include <Engine/GameViewportClient.h>
+#include <UObject/WeakObjectPtr.h>
 
 
 // Utilities helping to get a World Context.

@@ -1,15 +1,15 @@
 // Distributed under the MIT License (MIT) (see accompanying LICENSE file)
 
-#include "ImGuiPrivatePCH.h"
+#include "ImGuiEditor.h"
 
 #if WITH_EDITOR
 
-#include "ImGuiEditor.h"
-
+#include "ImGuiCanvasSizeInfoCustomization.h"
 #include "ImGuiKeyInfoCustomization.h"
 #include "ImGuiModuleSettings.h"
 
 #include <ISettingsModule.h>
+#include <Modules/ModuleManager.h>
 
 
 #define LOCTEXT_NAMESPACE "ImGuiEditor"
@@ -69,6 +69,8 @@ void FImGuiEditor::Register()
 		{
 			bCustomPropertyTypeLayoutsRegistered = true;
 
+			PropertyModule->RegisterCustomPropertyTypeLayout("ImGuiCanvasSizeInfo",
+				FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FImGuiCanvasSizeInfoCustomization::MakeInstance));
 			PropertyModule->RegisterCustomPropertyTypeLayout("ImGuiKeyInfo",
 				FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FImGuiKeyInfoCustomization::MakeInstance));
 		}
@@ -93,6 +95,7 @@ void FImGuiEditor::Unregister()
 
 		if (FPropertyEditorModule* PropertyModule = GetPropertyEditorModule())
 		{
+			PropertyModule->UnregisterCustomPropertyTypeLayout("ImGuiCanvasSizeInfo");
 			PropertyModule->UnregisterCustomPropertyTypeLayout("ImGuiKeyInfo");
 		}
 	}

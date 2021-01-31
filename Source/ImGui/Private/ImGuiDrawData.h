@@ -3,9 +3,9 @@
 #pragma once
 
 #include "ImGuiInteroperability.h"
+#include "VersionCompatibility.h"
 
-#include <Runtime/Launch/Resources/Version.h>
-#include <SlateCore.h>
+#include <Rendering/RenderingCommon.h>
 
 #include <imgui.h>
 

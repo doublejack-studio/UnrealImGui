@@ -1,15 +1,18 @@
 // Distributed under the MIT License (MIT) (see accompanying LICENSE file)
 
-#include "ImGuiPrivatePCH.h"
-
 #include "ImGuiInputHandler.h"
 
 #include "ImGuiContextProxy.h"
 #include "ImGuiInputState.h"
+#include "ImGuiModuleDebug.h"
 #include "ImGuiModuleManager.h"
 #include "ImGuiModuleSettings.h"
+#include "VersionCompatibility.h"
 
 #include <Engine/Console.h>
+#include <Framework/Application/SlateApplication.h>
+#include <GameFramework/InputSettings.h>
+#include <InputCoreTypes.h>
 #include <Input/Events.h>
 
 #if WITH_EDITOR
@@ -346,7 +349,9 @@ void UImGuiInputHandler::BeginDestroy()
 {
 	Super::BeginDestroy();
 
-	if (ModuleManager)
+	// To catch leftovers from modules shutdown during PIE session.
+	extern FImGuiModuleManager* ImGuiModuleManager;
+	if (ModuleManager && ModuleManager == ImGuiModuleManager)
 	{
 		ModuleManager->GetSettings().OnUseSoftwareCursorChanged.RemoveAll(this);
 	}

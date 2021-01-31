@@ -8,8 +8,8 @@
 #include <PropertyHandle.h>
 
 
-// Property type customization for FImGuiKeyInfo.
-class FImGuiKeyInfoCustomization : public IPropertyTypeCustomization
+// Property type customization for FImGuiCanvasSizeInfo.
+class FImGuiCanvasSizeInfoCustomization : public IPropertyTypeCustomization
 {
 public:
 	static TSharedRef<IPropertyTypeCustomization> MakeInstance();

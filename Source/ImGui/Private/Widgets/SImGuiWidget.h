@@ -5,6 +5,9 @@
 #include "ImGuiModuleDebug.h"
 #include "ImGuiModuleSettings.h"
 
+#include <Rendering/RenderingCommon.h>
+#include <UObject/WeakObjectPtr.h>
+#include <Widgets/DeclarativeSyntaxSupport.h>
 #include <Widgets/SCompoundWidget.h>
 
 
@@ -14,6 +17,9 @@
 class FImGuiModuleManager;
 class SImGuiCanvasControl;
 class UImGuiInputHandler;
+
+class UGameViewportClient;
+class ULocalPlayer;
 
 // Slate widget for rendering ImGui output and storing Slate inputs.
 class SImGuiWidget : public SCompoundWidget
@@ -103,6 +109,11 @@ private:
 	void UpdateTransparentMouseInput(const FGeometry& AllottedGeometry);
 	void HandleWindowFocusLost();
 
+	void SetDPIScale(const FImGuiDPIScaleInfo& ScaleInfo);
+
+	void SetCanvasSizeInfo(const FImGuiCanvasSizeInfo& CanvasSizeInfo);
+	void UpdateCanvasSize();
+
 	void UpdateCanvasControlMode(const FInputEvent& InputEvent);
 
 	void OnPostImGuiUpdate();
@@ -131,10 +142,18 @@ private:
 
 	int32 ContextIndex = 0;
 
+	FVector2D MinCanvasSize = FVector2D::ZeroVector;
+	FVector2D CanvasSize = FVector2D::ZeroVector;
+
+	float DPIScale = 1.f;
+
 	bool bInputEnabled = false;
 	bool bForegroundWindow = false;
 	bool bHideMouseCursor = true;
 	bool bTransparentMouseInput = false;
+	bool bAdaptiveCanvasSize = false;
+	bool bUpdateCanvasSize = false;
+	bool bCanvasControlEnabled = false;
 
 	TSharedPtr<SImGuiCanvasControl> CanvasControlWidget;
 	TWeakPtr<SWidget> PreviousUserFocusedWidget;
